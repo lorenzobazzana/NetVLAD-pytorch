@@ -6,7 +6,7 @@ import torch.nn.functional as F
 class NetVLAD(nn.Module):
     """NetVLAD layer implementation"""
 
-    def __init__(self, num_clusters=64, dim=128, alpha=100.0,
+    def __init__(self, num_clusters=64, dim=128, alpha=100.0, clusters=None,
                  normalize_input=True):
         """
         Args:
@@ -25,7 +25,11 @@ class NetVLAD(nn.Module):
         self.alpha = alpha
         self.normalize_input = normalize_input
         self.conv = nn.Conv2d(dim, num_clusters, kernel_size=(1, 1), bias=True)
-        self.centroids = nn.Parameter(torch.rand(num_clusters, dim))
+        if clusters is None:
+            print("Cluster centers not given as input, will use random centers")
+            self.centroids = nn.Parameter(torch.rand(num_clusters, dim))
+        else:
+            self.centroids = nn.Parameter(torch.from_numpy(clusters).to(torch.float))
         self._init_params()
 
     def _init_params(self):
@@ -37,7 +41,15 @@ class NetVLAD(nn.Module):
         )
 
     def forward(self, x):
-        N, C = x.shape[:2]
+
+        if len(x.shape) == 3:
+            N = 1
+            C = x.shape[0]
+            x = x.unsqueeze(0)
+        elif len(x.shape) == 4:
+            N, C = x.shape[:2]
+        else:
+            raise RuntimeError(f"Expected input tensor to be 4D (batched) or 3D (unbatched), but received in put with shape {x.shape}")
 
         if self.normalize_input:
             x = F.normalize(x, p=2, dim=1)  # across descriptor dim
